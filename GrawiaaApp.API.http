@@ -1,0 +1,6 @@
+@GrawiaaApp.API_HostAddress = http://localhost:5153
+
+GET {{GrawiaaApp.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
