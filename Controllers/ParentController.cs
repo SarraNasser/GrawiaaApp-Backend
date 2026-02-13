@@ -89,17 +89,38 @@ namespace GrawiaaApp.API.Controllers
         /// <summary>
         /// View messages sent by child
         /// </summary>
-        [HttpGet("messages-from-child/{childId}")]
-        public async Task<IActionResult> GetMessages(int childId)
-        {
-            var parentId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+        //[HttpGet("messages-from-child/{childId}")]
+        //public async Task<IActionResult> GetMessages(int childId)
+        //{
+        //    var parentId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
-            var messages = await _context.Notifications
+        //    var messages = await _context.Notifications
+        //        .Where(n => n.ReceiverId == parentId)
+        //        .OrderByDescending(n => n.CreatedAt)
+        //        .ToListAsync();
+
+        //    return Ok(messages);
+        //}
+        [HttpGet("my-notifications")] // غيري اسم الإندبوينت لـ Notifications عامة
+        [Authorize(Roles = "Parent")]
+        public async Task<IActionResult> GetMyNotifications()
+        {
+            var parentId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+            // هنجيب كل الحاجات اللي الـ Receiver بتاعها هو الأب ده
+            var notifications = await _context.Notifications
                 .Where(n => n.ReceiverId == parentId)
                 .OrderByDescending(n => n.CreatedAt)
+                .Select(n => new {
+                    n.Id,
+                    n.Message,
+                    n.IsUrgent,
+                    n.CreatedAt,
+                    n.IsRead
+                })
                 .ToListAsync();
 
-            return Ok(messages);
+            return Ok(notifications);
         }
 
         /// <summary>

@@ -229,21 +229,27 @@ namespace GrawiaaApp.API.Controllers
         }
 
         [HttpPost("send-message-to-parent")]
-        public async Task<IActionResult> SendMessage([FromBody] ChildMessageDto dto)
+        [Authorize(Roles = "Child")]
+        public async Task<IActionResult> SendMessageToParent([FromBody] ChildMessageDto dto)
         {
-            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-            var child = await _context.Users.FindAsync(userId);
+            var childId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var child = await _context.Users.FindAsync(childId);
 
-            if (child?.ParentId == null) return BadRequest("Link your parent first.");
+            if (child?.ParentId == null)
+                return BadRequest("You are not linked to a parent yet.");
 
-            _context.Notifications.Add(new Notification
+            var notification = new Notification
             {
-                ReceiverId = child.ParentId.Value,
-                Message = $"Message from {child.FullName}: {dto.Content}",
+                Message = $"Message from {child.FullName}: {dto.Content}", // هنضيف اسم الطفل جوه الرسالة عشان الأب يعرف مين بعت
+                ReceiverId = (int)child.ParentId, // هنا بنبعتها للأب
+                IsRead = false,
+                IsUrgent = false,
                 CreatedAt = DateTime.UtcNow
-            });
+            };
 
+            _context.Notifications.Add(notification);
             await _context.SaveChangesAsync();
+
             return Ok(new { message = "Sent to parent! 💌" });
         }
 
@@ -255,19 +261,26 @@ namespace GrawiaaApp.API.Controllers
             var childId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var child = await _context.Users.FindAsync(childId);
 
+            // 1. بندور على طلب الربط بالتوكن
             var linkRequest = await _context.ParentLinkRequests
                 .FirstOrDefaultAsync(r => r.ChildId == childId && r.Token == dto.Token);
 
             if (linkRequest == null || linkRequest.IsUsed || linkRequest.ExpiryDate < DateTime.UtcNow)
                 return BadRequest("Invalid or expired link token");
 
-            // ربط الطفل بالأب
-            child.ParentId = linkRequest.ChildId; // أو parent ID من الـ request
+            // 2. اللقطة هنا: بنجيب الأب من الداتابيز عن طريق الـ Email اللي في الطلب
+            var parent = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email == linkRequest.ParentEmail);
+
+            if (parent == null)
+                return BadRequest("Parent account not found.");
+
+            // 3. نربط الطفل بـ ID الأب الحقيقي اللي لقيناه
+            child.ParentId = parent.Id;
             linkRequest.IsUsed = true;
 
             await _context.SaveChangesAsync();
             return Ok(new { message = "Parent linked successfully! 🎉" });
         }
-
     }
 }
